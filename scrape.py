@@ -37,32 +37,10 @@ from lxml.html.clean import Cleaner
 from lxml import etree, html
 from optparse import OptionParser
 
-
-#
-# retrieve URL
-#
-def geturl(url):
-	import requests
-        r = requests.get(url)
-        http = str(r.status_code)
-	code='utf-8'
-	if (http == "200"):
-		# prefer declared encoding in case of mismatch 
-		if (code != r.encoding):
-			code = r.encoding
-		# override encoding if option is given to guess encoding by content
-		if options.guess:
-			encoding = chardet.detect(r.content) # guess encoding
-			code= encoding['encoding']
-		# override if encoding is given by default
-		if options.encoding:
-			code = options.encoding
-        	html =  unicode(r.text).decode(code)
-	else:
-		html = ""
-		code = "none"
-	
-        return(html,http,code,r.url)
+from hactar.db import storeArticleText
+from hactar.db import markArticleScraped
+from hactar.db import storeLineHash
+from hactar.net import geturl
 
 #
 # scrape
@@ -80,8 +58,13 @@ def scrape(lineHashDB,html,encoding):
 	cleaner.kill_tags = ['script']
 	
 	#invoke cleaner
-        #ValueError: Unicode strings with encoding declaration are not supported. Please use bytes input or XML fr 
-	page=cleaner.clean_html(html)
+        try:
+            page=cleaner.clean_html(html)
+        except:
+            #error: ValueError: Unicode strings with encoding declaration are not supported. Please use bytes input or XML fr 
+            content = u""
+            return content
+
 	page8=page
 	page8 = re.sub(u'\n',' ',page8) # remove NL 
 #	page8 = re.sub(u'\s','',page8,re.UNICODE) # blanks -> space
@@ -135,14 +118,10 @@ def cleanupText(lineHashDB,page,lineThreshold):
 			content += "~"
 			content += line
 			content += " "
-	                print "+",dups,line
-	            else:
-	                print "-",dups,line
-        	else:
+        	else: 
 			content += "~"
 			content += line
 			content += " "
-	                print "+ 0 ",line
 	return(content)
 
 
@@ -151,68 +130,18 @@ def cleanupText(lineHashDB,page,lineThreshold):
 # get page, scrape, print out
 #
 def print_content(url):
-	(html,http,encoding,rurl) = geturl(url)
+	(html,http,encoding,rurl,rheaders,rheaderserr) = geturl(url)
 
 	if http != "200":
 		print "\nERR ",http,rurl,encoding
 	else:	
 		print "\nOK ",http,rurl,encoding
-		page=scrape(lineHashD,Bhtml,encoding)
+		page=scrape(lineHashDB,html,encoding)
 		#s = page.decode(encoding,'ignore').encode('utf-8')
 		print(page)
 
 
-# Store a hash of each string in page, 
-def storeLineHash(lineHashDB,page):
-    for line in page.splitlines():
-        md5hash=hashlib.md5(line).hexdigest()
-        ts = datetime.datetime.utcnow()
-        dups= lineHashDB.find({'hash':md5hash}).count() 
-	if dups >0:
-            lineHashDB.update({'hash':md5hash},
-                    {
-                        '$inc': {'count':1},
-                        '$set': {'last':ts}
-                    },
-                    upsert=True,
-                    multi=True)
-        else:
-            lineHashDB.insert_one(
-                {
-                    'hash': md5hash,
-                    'first': ts,
-                    'last': ts,
-                    'line': line,
-                    'count': 1
-                }
-            )
 
-            # update article: scraped 
-def markScraped (articleDB,oid,exception):
-	ts = datetime.datetime.utcnow()
-	articleDB.update({'_id':oid},
-		{
-			'$set': { 
-                            'scraped':ts,
-                            'scrapingException':exception
-			},
-		},
-                upsert=True,
-                multi=False)
-
-# update article with scraped text data
-def storeArticle (articleDB,oid,page):
-	ts = datetime.datetime.utcnow()
-	articleDB.update({'_id':oid},
-		{
-			'$set': { 
-				'text': page,
-				'scraped': ts
-			},
-		},
-                upsert=True,
-                multi=False)
-		
 #
 # retrieve and scrape from URL or rescrape from DB
 # invoke as 
@@ -252,7 +181,7 @@ if options.url:
 	print_content(options.url)
 else:
 	if (len(sys.argv[0].split('-'))<=1):
-		print sys.argv[0],": give <url> as argument or invoke as ",sys.argv[0]+"dbname"
+		print sys.argv[0],": give -u <url> as argument or invoke as ",sys.argv[0]+"dbname"
 		quit()
 
 	(prog,dbname) = sys.argv[0].split('-',1)
@@ -305,17 +234,17 @@ else:
 		except UnicodeDecodeError:
 			print "\nKO",oid, feed, url, "text size:",textsize,"decoding exception:", code
                         exception="decoding exception"+code
-                        markScraped(articleDB,oid,exception)
+                        markArticleScraped(articleDB,oid,exception)
 			pass
 		if len(page)==0:
                     next
 
 		# store line hashes and update article with scraped text
- 		print "OK", str(counter)+"/"+str(items),url
+ 		#print "OK", str(counter)+"/"+str(items),url
                 storeLineHash(lineHashDB,page)
 		if not options.train:
 		# threshold 
 			threshold = 12
 			text=cleanupText(lineHashDB,page,threshold)
-			storeArticle(articleDB,oid,text)
+			storeArticleText(articleDB,oid,text)
 

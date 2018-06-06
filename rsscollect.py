@@ -37,64 +37,11 @@ from pymongo import MongoClient
 from lxml.html.clean import Cleaner
 from optparse import OptionParser
 
+from hactar.strings import normalize
+from hactar.db import storeFeedItem
+from hactar.db import logFeed
+from hactar.net import getFeed
 
-# collect entries in feeds or exceptions
-def get_feed(url):
-	f=feedparser.parse(url)
-	if f.bozo == 1 :
-		if f["entries"]:
-			return (f.bozo,f["entries"],f.bozo_exception) 
-		else:
-			return (f.bozo,'',f.bozo_exception) 
-	else:
-		return (f.bozo,f["entries"],"none")
-
-# normalize strings avoiding duplicate blanks, vertical spacing, etc
-def normalize(each):
-    each = each.replace(u'\n', '',re.UNICODE| re.MULTILINE) # remove newlines
-    each = each.replace(u'\r', '',re.UNICODE| re.MULTILINE) # remove linefeed
-    each = each.replace(u'\t', ' ',re.UNICODE| re.MULTILINE) # remove tabs
-    each = each.replace(u'^\s+', '',re.UNICODE) # remove leading whitespace
-    each = each.replace(u'\s+$', '',re.UNICODE) # remove trailing whitespace
-    each = " ".join(re.split("\s+", each, flags=re.UNICODE))
-    cleanr = re.compile('<.*?>')
-    text = re.sub(cleanr, '', each)
-    return(text)
-
-# log feed statistics and errors
-def logFeed(feedlogDB,oid,site,name,num,url,exception):
-	ts = datetime.datetime.utcnow()
-	feedlogDB.insert_one(
-		{
-			'timestamp':ts,
-			'feedSourceOID':oid,
-			'feedSite':site,
-			'feedName':name,
-			'itemsFound':num,
-			'feedURL':url,
-			'exception':str(exception),
-		}
-	)
-
-# store feed items in mongodb collection
-def storeFeedItem(feeditemDB,oid,itemhash,url,site,name,title,link,published,author,summary):
-		feeditemDB.insert_one(
-			{
-				'itemTitle': title,
-				'feedSite': site,
-				'feedName': name,
-				'feedURL': url,
-				'itemLink': link,
-				'itemPublished': published,
-				'itemAuthor': author,
-				'itemSummary': summary,
-				'itemMD5hash': itemhash,
-				'collected': False,
-				'channel': "rss"
-			}
-		)
-		print itemhash,published,site,name,url,link
-		return(1)
 
 # #
 # MAIN
@@ -127,7 +74,7 @@ if options.url and options.reload:
 
 
 if options.url:
-        (bozo,feedItems,exception) = get_feed(options.url)
+        (bozo,feedItems,exception) = getFeed(options.url)
 	if bozo:
 		print exception
 	else:
@@ -156,7 +103,8 @@ else:
         feeditemDB.create_index('itemMD5hash',unique=True)
 
 	# read feeds collection
-        all = feedsourceDB.find({"active": True},no_cursor_timeout=False)
+        all = feedsourceDB.find({"active": True, "protocol":"rss"},no_cursor_timeout=False)
+        #all = feedsourceDB.find({"active": True},no_cursor_timeout=False)
 
 	# collect data in each feed
         for feed in all:
@@ -165,7 +113,7 @@ else:
                 site=feed['site']
 		name=feed['name']
 
-	        (bozo,feedItems,exception) = get_feed(url)
+	        (bozo,feedItems,exception) = getFeed(url)
 		num=len(feedItems)
 		if bozo == 1:
 			logFeed(feedlogDB,oid,site,name,num,url,exception)

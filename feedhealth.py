@@ -166,4 +166,4 @@ for feed in feeds:
             upsert=True,
             multi=False)
 
-        print  datetime.datetime.utcnow(), str(oldRating)+"->"+str(newRating)+'\t'+str(itemC)+'\t'+str(artC)+'\t',source
+        print  datetime.datetime.utcnow(), str(oldRating)+"->"+str(newRating)+'\t'+str(itemC)+'\t'+str(artC)+'\t',dbname+"|"+source

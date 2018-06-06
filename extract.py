@@ -30,7 +30,6 @@ import unicodedata
 import datetime
 import httplib
 import chardet
-from scrapy.selector import Selector
 from bson import Binary
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
@@ -62,7 +61,7 @@ for item in all:
     f.write( u'source: ')
     f.write( item['source'].encode(code,'ignore'))
     f.write( "\n" )
-    f.write( u"date: "+item['published']+"\n" )
+    f.write( u"date: "+str(item['published'])+"\n" )
     f.write( u'author: ')
     f.write( item['author'].encode(code,'ignore'))
     f.write( "\n" )
