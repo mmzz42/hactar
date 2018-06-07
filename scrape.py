@@ -35,7 +35,7 @@ from scrapy.selector import Selector
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
 from lxml import etree, html
-from optparse import OptionParser
+from argparse import ArgumentParser
 
 from hactar.db import storeArticleText
 from hactar.db import markArticleScraped
@@ -154,47 +154,36 @@ reload(sys)
 sys.setdefaultencoding('utf-8')
 
 
-usage = "usage: %prog [options] arg"
-parser = OptionParser(usage)
-
-parser = OptionParser()
-parser.add_option("-r", "--reload", action="store_true", dest="reload", 
-	help="reload articles from url in db")
-parser.add_option("-e", "--encoding", dest="encoding", 
-	help="force encoding. Default UTF-8 or as specified in HTML page")
-parser.add_option("-g", "--guess", action="store_true", dest="guess", 
-	help="guess encoding by content, works with -u ")
-parser.add_option("-t", "--train", action="store_true",  dest="train", 
+parser = ArgumentParser()
+parser.add_argument("dbname", type=str,help='database name')
+parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
+parser.add_argument("-t", "--train", action="store_true",  dest="train", 
 	help="train lineHash db: insert all lines even over threshold")
-parser.add_option("-u", "--url", dest="url", 
+parser.add_argument("-u", "--url", dest="url", 
 	help="load one specific url")
-(options, args) = parser.parse_args()
-if options.guess and not options.url:
-    parser.error("option -g works with -u")
-if options.guess and options.encoding:
-    parser.error("options -g and -e are mutually exclusive")
-if options.url and options.reload:
-    parser.error("options -u and -r are mutually exclusive")
 
+(args) = parser.parse_args()
 
-if options.url:
-	print_content(options.url)
+if args.url:
+	print_content(args.url)
 else:
-	if (len(sys.argv[0].split('-'))<=1):
-		print sys.argv[0],": give -u <url> as argument or invoke as ",sys.argv[0]+"dbname"
-		quit()
+        if (not args.dbname) :
+            print sys.argv[0],
+            ": database name argument needed"
+            quit()
 
-	(prog,dbname) = sys.argv[0].split('-',1)
+        
+        dbname=args.dbname
 	server="mongoPrimary:27017"
 
 	client = MongoClient(server)
 	db = client[dbname]
         now = datetime.datetime.now()
 
-	articleDB = db['article'+str(now.year)]
+	articleDB = db['article']
 	articleDB.create_index('scraped')
 
-	lineHashDB = db['lineHash'+str(now.year)]
+	lineHashDB = db['lineHash']
 	lineHashDB.create_index('hash', unique=True)
 
 
@@ -208,11 +197,6 @@ else:
 		url=article['URL']
 		feed=article['source']
 		code=article['encoding']
-
-		# download article from stored URL
-		if options.reload==True:
-			print_content(url)
-			continue
 
 		# extract from archived copy
 	        bzText=article['bzhtml']
@@ -242,9 +226,11 @@ else:
 		# store line hashes and update article with scraped text
  		#print "OK", str(counter)+"/"+str(items),url
                 storeLineHash(lineHashDB,page)
-		if not options.train:
+		if not args.train:
 		# threshold 
 			threshold = 12
 			text=cleanupText(lineHashDB,page,threshold)
 			storeArticleText(articleDB,oid,text)
+                        if args.verbose:
+                            print "NEW TEXT: ",feed,url
 

@@ -35,7 +35,7 @@ from bson import Binary
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
 from lxml import etree, html
-from optparse import OptionParser
+from argparse import ArgumentParser
 
 from hactar.net import geturl
 from hactar.db import logArticle
@@ -49,26 +49,25 @@ from hactar.db import storeArticle
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
+parser = ArgumentParser()
+parser.add_argument("dbname", type=str,help='database name')
+parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
 
-usage = "usage: %prog [options] arg"
-parser = OptionParser(usage)
-
-parser = OptionParser()
-(options, args) = parser.parse_args()
-
-if (len(sys.argv[0].split('-'))<=1):
-    print sys.argv[0],": give <url> as argument or invoke as ",sys.argv[0]+"dbname"
+(args) = parser.parse_args()
+if (not args.dbname) : 
+    print sys.argv[0], 
+    ": database name argument needed" 
     quit()
+dbname=args.dbname
 
-(prog,dbname) = sys.argv[0].split('-',1)
 server="mongoPrimary:27017"
 client = MongoClient(server)
 db = client[dbname]
 now = datetime.datetime.now()
 
-articleDB = db["article"+str(now.year)]
-feeditemDB = db["feeditem"+str(now.year)]
-articlelogDB = db["log_article"+str(now.year)]
+articleDB = db["article"]
+feeditemDB = db["feeditem"]
+articlelogDB = db["log_article"]
     
 all = feeditemDB.find({'collected': False},no_cursor_timeout=False)
 
@@ -96,3 +95,5 @@ for feeditem in all:
 
     bzhtml=bz2.compress(html)
     storeArticle(articleDB,source,title,summary,published,author,bzhtml,code,realurl,headers)
+    if args.verbose:
+        print "NEW ARTICLE: ",source,realurl

@@ -35,8 +35,8 @@ import urlparse
 from time import mktime
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
-from optparse import OptionParser
-
+from argparse import ArgumentParser
+#
 from hactar.strings import normalize
 from hactar.db import storeFeedItem
 from hactar.db import logFeed
@@ -51,54 +51,41 @@ reload(sys)
 sys.setdefaultencoding('utf-8')
 socket.setdefaulttimeout(10)
 
-usage = "usage: %prog [options] arg"
-parser = OptionParser(usage)
+parser = ArgumentParser()
+parser.add_argument("dbname", type=str,help='database name')
+parser.add_argument("-u", "--url", dest="url",help="load one specific url")
+parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
 
-parser = OptionParser()
-parser.add_option("-r", "--reload", action="store_true", dest="reload",
-        help="reload articles from url in db")
-parser.add_option("-e", "--encoding", dest="encoding",
-        help="force encoding. Default UTF-8 or as specified in HTML page")
-parser.add_option("-g", "--guess", action="store_true", dest="guess",
-        help="guess encoding by content")
-parser.add_option("-R", "--reloadOnFail", action="store_true",  dest="rof",
-        help="reload only if cdb copy is empty or failed")
-parser.add_option("-u", "--url", dest="url",
-        help="load one specific url")
-
-(options, args) = parser.parse_args()
-if options.guess and options.encoding:
-    parser.error("options -g and -e are mutually exclusive")
-if options.url and options.reload:
-    parser.error("options -u and -r are mutually exclusive")
-
-
-if options.url:
-        (bozo,feedItems,exception) = getFeed(options.url)
+(args) = parser.parse_args()
+    
+if args.url:
+        (bozo,feedItems,exception) = getFeed(args.url)
 	if bozo:
 		print exception
 	else:
 		for item in feedItems:
-			print item[ "link" ]
+                    if args.verbose:
+                        print "feed:",args.url,"item",item[ "link" ]
 else:
-	if (len(sys.argv[0].split('-'))<=1):
-		print sys.argv[0],": give <url> as argument or invoke as ",sys.argv[0]+"dbname"
+	if (not args.dbname) :
+		print sys.argv[0],
+                ": give -u url as RSS feed or dbname (feedsouce collection needed) "
         	quit()
 
-        (prog,dbname) = sys.argv[0].split('-',1)
         server="mongoPrimary:27017"
+        dbname=args.dbname
 
         client = MongoClient(server)
         db = client[dbname]
         now = datetime.datetime.now()
 
-        feedsource="feedsource"+ str(now.year)
+        feedsource="feedsource"
         feedsourceDB = db[feedsource]
 
-	feedlog="log_feed"+str(now.year)
+	feedlog="log_feed"
         feedlogDB = db[feedlog]
 
-	feeditem="feeditem"+str(now.year)
+	feeditem="feeditem"
         feeditemDB = db[feeditem]
         feeditemDB.create_index('itemMD5hash',unique=True)
 
@@ -112,6 +99,8 @@ else:
                 url=feed['URL']
                 site=feed['site']
 		name=feed['name']
+                if args.verbose:
+                    print "FEED: ",site+"|"+name
 
 	        (bozo,feedItems,exception) = getFeed(url)
 		num=len(feedItems)
@@ -153,3 +142,5 @@ else:
                 	contenthash=hashlib.md5(str(published)+link+title).hexdigest()
                         if feeditemDB.find({"itemMD5hash": itemhash},no_cursor_timeout=False).count() == 0:
         		    storeFeedItem(feeditemDB,oid,itemhash,url,site,name,title,link,published,author,summary)
+                            if args.verbose:
+                                print "NEW ITEM: ",site,name,link

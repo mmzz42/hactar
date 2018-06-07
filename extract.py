@@ -22,6 +22,7 @@ import getopt
 import codecs
 import bson
 import bz2
+import os
 import re
 import validators
 import md5
@@ -34,15 +35,35 @@ from bson import Binary
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
 from lxml import etree, html
-from optparse import OptionParser
+from argparse import ArgumentParser
 
-(prog,dbname) = sys.argv[0].split('-',1)
+
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+parser = ArgumentParser()
+parser.add_argument("dbname", type=str,help='database name')
+parser.add_argument("dir", type=str,help='target directory name')
+parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
+(args) = parser.parse_args()
+if (not args.dbname) :
+        print sys.argv[0], ": database name argument needed"
+        quit()
+dbname=args.dbname
+
+try: 
+        os.makedirs(args.dir)
+except OSError:
+       if not os.path.isdir(args.dir):
+           raise
+           quit()
+
 server="mongoPrimary:27017"
 client = MongoClient(server)
 db = client[dbname]
 now = datetime.datetime.now()
 
-articleDB = db["article"+str(now.year)]
+articleDB = db["article"]
 
 all = articleDB.find({},no_cursor_timeout=False)
 UTF8Writer = codecs.getwriter('utf8')
@@ -54,7 +75,8 @@ for item in all:
     oid=str(item['_id'])
     code=item['encoding']
     code='utf-8'
-    fname='article'+str(datetime.datetime.now().year)+'-'+oid+'.txt'
+    #fname='article'+str(datetime.datetime.now().year)+'-'+oid+'.txt'
+    fname=args.dir+'/article'+'-'+oid+'.txt'
     f=open(fname, 'w+')
     sys.stdout = f
     f.write( u"oid: "+oid+"\n")

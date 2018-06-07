@@ -24,6 +24,8 @@ import time
 import re
 import hashlib
 from pymongo import MongoClient
+from argparse import ArgumentParser
+  
 
 def classify_feed(items,periodA,periodB):
     # classify feed accesses according to feeds found (count will include
@@ -104,21 +106,28 @@ reload(sys)
 sys.setdefaultencoding('utf-8')
 socket.setdefaulttimeout(10)
 
-if (len(sys.argv[0].split('-'))<=1):
-	print sys.argv[0],": invoke as ",sys.argv[0]+"-dbname"
-       	quit()
 
-(prog,dbname) = sys.argv[0].split('-',1)
+parser = ArgumentParser()
+parser.add_argument("dbname", type=str,help='database name')
+parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
+
+(args) = parser.parse_args()
+if (not args.dbname) :
+        print sys.argv[0],
+        ": database name argument needed"
+        quit()
+
+dbname=args.dbname
 server="mongoPrimary:27017"
 
 client = MongoClient(server)
 db = client[dbname]
 now = datetime.datetime.now()
 
-feedsourceDB = db['feedsource'+ str(now.year)]
-articleDB = db['article'+str(now.year)]
-feedlogDB = db['log_feed'+str(now.year)]
-feeditemDB = db['feeditem'+str(now.year)]
+feedsourceDB = db['feedsource']
+articleDB = db['article']
+feedlogDB = db['log_feed']
+feeditemDB = db['feeditem']
 
 #periodC = now.replace(year=now.year - 1)
 periodC = now - datetime.timedelta(days=30)
@@ -165,5 +174,8 @@ for feed in feeds:
             },
             upsert=True,
             multi=False)
+        print  datetime.datetime.utcnow(), str(oldRating)+"->"+str(newRating)+'\t'+str(artA)+' '+str(artB)+' '+str(artC)+'\t',dbname+"|"+source
+    else:
+        if args.verbose:
+            print  datetime.datetime.utcnow(), str(oldRating)+"=="+str(newRating)+'\t'+str(artA)+' '+str(artB)+' '+str(artC)+'\t',dbname+"|"+source
 
-        print  datetime.datetime.utcnow(), str(oldRating)+"->"+str(newRating)+'\t'+str(itemC)+'\t'+str(artC)+'\t',dbname+"|"+source
