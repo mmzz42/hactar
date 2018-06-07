@@ -21,27 +21,37 @@ import sys
 import validators
 import lxml
 import datetime
-from scrapy.selector import Selector
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
 from lxml import etree, html
-from optparse import OptionParser
+from argparse import ArgumentParser
+from hactar.net import geturl
+from urlparse import urlparse
+from urlparse import urljoin
+from scrapy.linkextractors import LinkExtractor
+from scrapy.selector import Selector
 
-
-
-def extractLinks(html):
-    xpath='//img[@href]'
+def internalLinks(html,baseurl):
+    internalLinks=[]
+    xpath='//a[@href]'
+    xpath='//@href'
     sel=Selector(text=html, type="html") 
     links=sel.xpath(xpath).extract() 
     if links: 
         for i in links: 
             i=i.replace("\n", "") 
-            if (not validators.url(i)):
-                print "rejected ",i
-                continue 
+            i = urljoin(baseurl, i)
+#            if (not validators.url(i)):
+#                print "rejected ",i
+#                continue 
+#            else:
+            if i.startswith(baseurl):
+               if i not in internalLinks:
+                   internalLinks.append(i)
+               if args.verbose: print "internal ", i 
             else:
-                print "accepted ",i
-        
+               if args.verbose: print "external ", i 
+    return(internalLinks) 
 
 #page ratio sub
     #validate URL
@@ -66,8 +76,14 @@ parser.add_argument("-u", "--url", dest="url", 	help="load one specific url")
 (args) = parser.parse_args()
 
 if args.url:
-    (html,http,code,r.url,r.headers,err)=geturl(url)
-    extract_links(html)
+    url=args.url
+    parsed=urlparse(url)
+    scheme=parsed.scheme
+    netloc=parsed.netloc
+    baseurl=scheme+'://'+netloc
+#    path=parsed.path
+    (html,http,code,url,headers,err)=geturl(url)
+    internalLinks=internalLinks(html,baseurl)
 
 else:
     dbname=args.dbname
