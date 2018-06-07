@@ -18,25 +18,30 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.#
 
 import sys
-import getopt
-import codecs
-import bson
-import bz2
-import re
 import validators
-import md5
 import lxml
-import unicodedata
 import datetime
-import httplib
-import chardet
 from scrapy.selector import Selector
-from bson import Binary
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
 from lxml import etree, html
 from optparse import OptionParser
 
+
+
+def extractLinks(html):
+    xpath='//img[@href]'
+    sel=Selector(text=html, type="html") 
+    links=sel.xpath(xpath).extract() 
+    if links: 
+        for i in links: 
+            i=i.replace("\n", "") 
+            if (not validators.url(i)):
+                print "rejected ",i
+                continue 
+            else:
+                print "accepted ",i
+        
 
 #page ratio sub
     #validate URL
@@ -53,10 +58,49 @@ from optparse import OptionParser
 ##MAIN
 ##
 
-# get page URL
-(html,http,code,r.url,r.headers,err)=geturl(url)
+parser = ArgumentParser()
+parser.add_argument("dbname", type=str,help='database name')
+parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
+parser.add_argument("-u", "--url", dest="url", 	help="load one specific url")
 
-# Page cleanup
+(args) = parser.parse_args()
+
+if args.url:
+    (html,http,code,r.url,r.headers,err)=geturl(url)
+    extract_links(html)
+
+else:
+    dbname=args.dbname
+    server="mongoPrimary:27017"
+    
+    client = MongoClient(server)
+    db = client[dbname]
+    now = datetime.datetime.now()
+
+    articleDB = db['sourceFeed']
+    articleDB = db['article']
+    
+    all = feedsourceDB.find({"active": True, "protocol":"html"},no_cursor_timeout=False)    
+    all = articleDB.find({'scraped': False},no_cursor_timeout=False)
+    items=all.count()
+    counter=0
+
+    for feed in all:
+                oid=feed['_id']
+                url=feed['URL']
+                site=feed['site']
+		name=feed['name']
+                if args.verbose:
+                    print "FEED: ",site+"|"+name
+
+# get page URL
+
+
+
+
+
+
+        # Page cleanup
 
 # Extract http links in page
 
