@@ -31,6 +31,27 @@ from urlparse import urljoin
 from scrapy.linkextractors import LinkExtractor
 from scrapy.selector import Selector
 
+
+def cleanpage(html)
+	# cleaner setup
+	cleaner = Cleaner(allow_tags=['a'], remove_unknown_tags=False)
+	cleaner.javascript = True # activate the javascript filter
+	cleaner.style = True      #  activate the styles & stylesheet filter
+	cleaner.comments = True
+	cleaner.annoying_tags = True
+	cleaner.inline_style = True
+	cleaner.page_structure = False
+	cleaner.remove_tags = ['b','img','h']
+	cleaner.kill_tags = ['script']
+	
+	#invoke cleaner
+        try:
+            page=cleaner.clean_html(html)
+        except:
+            #error: ValueError: Unicode strings with encoding declaration are not supported. Please use bytes input or XML fr 
+            content = u""
+            return content
+
 def internalLinks(html,baseurl):
     internalLinks=[]
     xpath='//a[@href]'
@@ -81,10 +102,12 @@ if args.url:
     scheme=parsed.scheme
     netloc=parsed.netloc
     baseurl=scheme+'://'+netloc
-#    path=parsed.path
-    (html,http,code,url,headers,err)=geturl(url)
-    internalLinks=internalLinks(html,baseurl)
 
+    (html,http,code,url,headers,err)=geturl(url)
+    html=cleanpage(html)
+    internalLinks=internalLinks(html,baseurl)
+    print "internel links: ",len(internalLinks)
+    
 else:
     dbname=args.dbname
     server="mongoPrimary:27017"
@@ -109,7 +132,7 @@ else:
                 if args.verbose:
                     print "FEED: ",site+"|"+name
 
-# get page URL
+
 
 
 
