@@ -32,27 +32,35 @@ from scrapy.linkextractors import LinkExtractor
 from scrapy.selector import Selector
 
 
-def cleanpage(html)
+def cleanpage(html):
 	# cleaner setup
-	cleaner = Cleaner(allow_tags=['a'], remove_unknown_tags=False)
+	cleaner = Cleaner()
+        cleaner.html = True
+        cleaner.page_structure = False
+        cleaner.meta = False
+        cleaner.safe_attrs_only = False
+        cleaner.links = False
 	cleaner.javascript = True # activate the javascript filter
 	cleaner.style = True      #  activate the styles & stylesheet filter
+        cleaner.links = False
+        cleaner.frames = True
+        cleaner.embedded = True
 	cleaner.comments = True
 	cleaner.annoying_tags = True
 	cleaner.inline_style = True
 	cleaner.page_structure = False
-	cleaner.remove_tags = ['b','img','h']
-	cleaner.kill_tags = ['script']
+#	cleaner.remove_tags = ['b','img','h']
+	cleaner.kill_tags = ['img','script']
 	
 	#invoke cleaner
         try:
-            page=cleaner.clean_html(html)
+            content=cleaner.clean_html(html)
         except:
             #error: ValueError: Unicode strings with encoding declaration are not supported. Please use bytes input or XML fr 
             content = u""
-            return content
+        return content
 
-def internalLinks(html,baseurl):
+def getInternalLinks(html,baseurl):
     internalLinks=[]
     xpath='//a[@href]'
     xpath='//@href'
@@ -62,17 +70,30 @@ def internalLinks(html,baseurl):
         for i in links: 
             i=i.replace("\n", "") 
             i = urljoin(baseurl, i)
-#            if (not validators.url(i)):
-#                print "rejected ",i
-#                continue 
-#            else:
             if i.startswith(baseurl):
                if i not in internalLinks:
                    internalLinks.append(i)
-               if args.verbose: print "internal ", i 
+               if args.debug: print "internal ", i 
             else:
-               if args.verbose: print "external ", i 
+               if (validators.url(i)):
+                    if args.debug: print "external ", i 
+               else:
+                    if args.debug: print "rejected ",i
     return(internalLinks) 
+
+def getBase(url):
+    links=[]
+    parsed=urlparse(url)
+    scheme=parsed.scheme
+    netloc=parsed.netloc
+    baseurl=scheme+'://'+netloc
+    (html,http,code,url,headers,err)=geturl(url)
+    if (http == "200") and ("text/html" in headers['Content-Type'].lower()):
+        html=cleanpage(html)
+        links=getInternalLinks(html,baseurl)
+    return(links)
+
+
 
 #page ratio sub
     #validate URL
@@ -92,21 +113,19 @@ def internalLinks(html,baseurl):
 parser = ArgumentParser()
 parser.add_argument("dbname", type=str,help='database name')
 parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
-parser.add_argument("-u", "--url", dest="url", 	help="load one specific url")
+parser.add_argument("-u", "--url", dest="url", help="load one specific url")
+parser.add_argument("-d", "--debug", dest="debug", help="debug extra output")
 
 (args) = parser.parse_args()
 
 if args.url:
     url=args.url
-    parsed=urlparse(url)
-    scheme=parsed.scheme
-    netloc=parsed.netloc
-    baseurl=scheme+'://'+netloc
+    firstLinks=getBase(url)
+    if args.verbose: print "internal first links: ",len(firstLinks), url
+    for link in firstLinks:
+        secondLinks = getBase(link)
+        if args.verbose: print "internal second links: ",len(secondLinks), link
 
-    (html,http,code,url,headers,err)=geturl(url)
-    html=cleanpage(html)
-    internalLinks=internalLinks(html,baseurl)
-    print "internel links: ",len(internalLinks)
     
 else:
     dbname=args.dbname
@@ -116,43 +135,26 @@ else:
     db = client[dbname]
     now = datetime.datetime.now()
 
-    articleDB = db['sourceFeed']
+    feedsourceDB = db['feedsource']
     articleDB = db['article']
     
-    all = feedsourceDB.find({"active": True, "protocol":"html"},no_cursor_timeout=False)    
-    all = articleDB.find({'scraped': False},no_cursor_timeout=False)
-    items=all.count()
+    feeds = feedsourceDB.find({"active": True, "protocol":"http"},no_cursor_timeout=False)    
+    items=feeds.count()
     counter=0
+    if args.verbose: print dbname+"/feedsource","has ",items," items"
 
-    for feed in all:
-                oid=feed['_id']
-                url=feed['URL']
-                site=feed['site']
-		name=feed['name']
-                if args.verbose:
-                    print "FEED: ",site+"|"+name
+    for feed in feeds:
+        oid=feed['_id']
+        url=feed['URL']
+        site=feed['site']
+        name=feed['name']
+        if args.verbose: print "FEED: ",site+"|"+name
 
-
-
-
-
-
-
-
-        # Page cleanup
-
-# Extract http links in page
-
-# for each link
-    # break link in components
-    # add host part in relative links (host=='')
-    # validate link or next
-    # count unique internal links
-
-# for each unique internal links
-    # calculate pageratio
-    # if accept save page
-    #
+        firstLinks=getBase(url)
+        if args.verbose: print "internal first links: ",len(firstLinks), url
+        for link in firstLinks:
+            secondLinks = getBase(link)
+            if args.verbose: print "internal second links: ",len(secondLinks), link
 
 
 

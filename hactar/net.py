@@ -33,7 +33,7 @@ from time import mktime
 from lxml.html.clean import Cleaner
 from optparse import OptionParser
 
-
+DEBUG=False
 
 # collect entries in feeds or exceptions
 def getFeed(url):
@@ -63,7 +63,7 @@ def geturl(url):
         try:
             r = requests.get(url)
         except requests.exceptions.RequestException as err:
-            print err,url
+            if DEBUG: print err,url
             return("","","",url,"",err)
 
         #http status code
@@ -71,12 +71,12 @@ def geturl(url):
 
         #empty page                
         if (len(r.text) == 0):
-            print "[%s][%s][%s][%s]" % (http,r.encoding,code,err)
+            if DEBUG: print "[%s][%s][%s][%s]" % (http,r.encoding,code,err)
             return("",http,"",r.url,r.headers,"emptyPage")
 
         #detect content type
         if (('content-type' not in r.headers) or ("text" not in r.headers['content-type'].lower())):
-            print "[%s][%s][%s][%s]" % (http,r.encoding,code,str(r.headers))
+            if DEBUG: print "[%s][%s][%s][%s]" % (http,r.encoding,code,str(r.headers))
             return("",http,"",r.url,r.headers,"noText")
             
 
@@ -104,9 +104,9 @@ def geturl(url):
             #html =  unicode(r.text).decode(code,'ignore')
             html =  unicode(r.text).decode(code,'strict')
         except UnicodeDecodeError as err:
-                print "[%s][%s][%s][%s]" % (http,r.encoding,code,err)
+                if DEBUG: print "[%s][%s][%s][%s]" % (http,r.encoding,code,err)
                 return(html,http,code,r.url,r.headers,err)
 
-        print "[%s][%s][%s][%s]" % (http,r.encoding,code,err)
+        if DEBUG: print "[%s][%s][%s][%s]" % (http,r.encoding,code,err)
         return(html,http,code,r.url,r.headers,err)
 
