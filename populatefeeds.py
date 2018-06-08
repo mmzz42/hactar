@@ -60,17 +60,18 @@ if args.interactive:
     name = raw_input('feed name ')  
     URL = raw_input('feed URL ')  
     hp = raw_input('homepage (True/False) ')  
+    protocol = raw_imput('protocol (rss|http)')
     if hp.lower == "true": 
          homepage = True
 else:
-    print "TAB separated values in stdin: site name Homepage:True/False url"
+    print "TAB separated values in stdin: site name Homepage:True/False protocol:(rss|http) url"
     for line in sys.stdin:
-            (site,name,hp,URL)=line.strip().split("\t")
+            (site,name,hp,protocol,URL)=line.strip().split("\t")
             if hp.lower == "true": 
                 homepage= True
 if args.verbose:
-    print site, name, URL, str(homepage)
+    print site, name, URL, protocol, str(homepage)
 
-populateFeedSource(feedsourceDB,URL,homepage,site,True,name)
+populateFeedSource(feedsourceDB,URL,homepage,site,True,protocol,name)
 
 
