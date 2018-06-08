@@ -37,7 +37,7 @@ from optparse import OptionParser
 
 
 # populate feed sources db
-def populateFeedSource(feedsourceDB,URL,homepage,site,active,name):
+def populateFeedSource(feedsourceDB,URL,homepage,site,active,protocol,name):
     from pymongo import MongoClient
     ts= datetime.datetime.utcnow()
     feedsourceDB.insert_one(
@@ -47,6 +47,7 @@ def populateFeedSource(feedsourceDB,URL,homepage,site,active,name):
                'site':site,
                'active':active,
                'name':name,
+               'protocol':protocol,
                'rating':'',
                'oldRating':'',
             }
