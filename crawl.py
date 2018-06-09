@@ -82,29 +82,38 @@ def getInternalLinks(html,baseurl):
     return(internalLinks) 
 
 def getBase(url):
-    links=[]
-    parsed=urlparse(url)
-    scheme=parsed.scheme
-    netloc=parsed.netloc
-    baseurl=scheme+'://'+netloc
-    (html,http,code,url,headers,err)=geturl(url)
-    if (http == "200") and ("text/html" in headers['Content-Type'].lower()):
+        links=[]
+        parsed=urlparse(url)
+        scheme=parsed.scheme
+        netloc=parsed.netloc
+        baseurl=scheme+'://'+netloc
+        (html,http,code,url,headers,err)=geturl(url)
+        if (http == "200") and ("text/html" in headers['Content-Type'].lower()):
+                html=cleanpage(html)
+                links=getInternalLinks(html,baseurl)
+
+        return(links)
+
+
+def pageRatio(url,links,parameter):
+
+        textxpath="//*[((p) or (a) or (div)) ]/node()/text()"
+        dashes = url.count('_')
+        dashes = dashes + url.count('-')
+    
+        # URL metrics
+        urlLen = len(url)
+        html=geturl(url)
         html=cleanpage(html)
-        links=getInternalLinks(html,baseurl)
-    return(links)
+        sel=Selector(text=page8, type="html")
+        # page content metrics
+        text= sel.xpath(textxpath).extract()
+        textLen = len(text)
+        ratio=((textLen/links)*urlLen*--dashes)/parameter
+        ratio = ratio -1
 
-
-
-#page ratio sub
-    #validate URL
-    #get page
-    #clean page (scrub)
-    #for each a href path inside page
-
-
-    #ratio: (textlenght/internal links)* url length * --# of dashes in url/ factor (500)
-
-
+        return(ratio)
+    
 
 ##
 ##MAIN
@@ -125,7 +134,9 @@ if args.url:
     for link in firstLinks:
         secondLinks = getBase(link)
         if args.verbose: print "internal second links: ",len(secondLinks), link
-
+        for url in secondlinks:
+                ratio=pageratio(url)
+                print ratio
     
 else:
     dbname=args.dbname
@@ -155,6 +166,8 @@ else:
         for link in firstLinks:
             secondLinks = getBase(link)
             if args.verbose: print "internal second links: ",len(secondLinks), link
-
+            for url in secondlinks:
+                    ratio=pageratio(url)
+                    print ratio
 
 
