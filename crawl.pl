@@ -29,19 +29,6 @@ while (my $crawlfeed = $find->next) {
 	my %seen;
 
 
-	### Create the user agent ###
-	#resolve redirects & get URL
-	my $ua = LWP::UserAgent->new;
-	my $request  = HTTP::Request->new( GET => $seedURL);
-	my $response = $ua->request($request);
-	my $artRealURL = $seedURL;
-	$artRealURL = $response->request->uri()->as_string ;
-	my $artBody = $response->content;
-	my $downloadTS=DateTime->now();
-
-	#Body Cleanup
-	my $text = scrubBody ($artBody);
-
 	#SCRAPE URLs
 	use HTML::TreeBuilder::XPath;
 	my $root = HTML::TreeBuilder::XPath->new_from_content($artBody);
