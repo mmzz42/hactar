@@ -21,11 +21,15 @@ import sys
 import validators
 import lxml
 import datetime
+import hashlib
+
 from pymongo import MongoClient
 from lxml.html.clean import Cleaner
 from lxml import etree, html
 from argparse import ArgumentParser
 from hactar.net import geturl
+from hactar.db import storeLineHash
+from hactar.db import storeArticle
 from urlparse import urlparse
 from urlparse import urljoin
 from scrapy.linkextractors import LinkExtractor
@@ -92,28 +96,76 @@ def getBase(url):
                 html=cleanpage(html)
                 links=getInternalLinks(html,baseurl)
 
-        return(links)
+        return(html,links)
 
 
-def pageRatio(url,links,parameter):
-
+def pageRatio(url,html):
+    
+        ratio=-10
+        parameter=500
         textxpath="//*[((p) or (a) or (div)) ]/node()/text()"
         dashes = url.count('_')
         dashes = dashes + url.count('-')
     
         # URL metrics
         urlLen = len(url)
-        html=geturl(url)
-        html=cleanpage(html)
-        sel=Selector(text=page8, type="html")
         # page content metrics
+        html=cleanpage(html)
+        sel=Selector(text=html, type="html")
         text= sel.xpath(textxpath).extract()
         textLen = len(text)
-        ratio=((textLen/links)*urlLen*--dashes)/parameter
-        ratio = ratio -1
+        # links metrics
+        links=len(getInternalLinks(html,url))
+        
+        if links > 0: 
+            ratio=((textLen/links)*urlLen*--dashes)/parameter
+            ratio = ratio -1
 
         return(ratio)
-    
+
+def html2unicode(html):
+        from bs4 import BeautifulSoup
+        html8 = BeautifulSoup(html,"lxml")
+
+        return(html8.text)
+
+def getMeta(html):
+        import re
+        import time
+        from dateutil.parser import parse
+
+        r = re.search( "<title>(.*)<\title>", html )
+        r = re.search( "<meta property=\"og:title\".*?content=\"([^\"]*)\"", html )
+        if r is None:
+            title=None
+        else:
+            t=r.group( 1 )
+            title=html2unicode(t)
+
+        r = re.search( "<meta property=\"article:published_time\".*?content=\"([^\"]*)\"", html )
+        if r is None:
+            published=None
+        else:
+            p=r.group( 1 )
+            if p != None: published=parse(p)
+                                                                             
+
+        r=re.search( "<meta property=\"article:author\".*?content=\"([^\"]*)\"", html )
+        if r is None:
+            author=None
+        else:
+            a=r.group( 1 )
+            author=html2unicode(a)
+
+        r=re.search( "<meta property=\"og:description\".*?content=\"([^\"]*)\"", html )
+        if r is None:
+            summary=None
+        else:
+            s=r.group( 1 )
+            summary=html2unicode(s)
+
+
+        return(title,summary,author,published)
 
 ##
 ##MAIN
@@ -124,23 +176,24 @@ parser.add_argument("dbname", type=str,help='database name')
 parser.add_argument("-v", "--verbose", action="store_true", help="be chatty")
 parser.add_argument("-u", "--url", dest="url", help="load one specific url")
 parser.add_argument("-d", "--debug", dest="debug", help="debug extra output")
+parser.add_argument("-t", "--train", action="store_true", help="train url hash db")
 
 (args) = parser.parse_args()
 
 if args.url:
     url=args.url
-    firstLinks=getBase(url)
-    if args.verbose: print "internal first links: ",len(firstLinks), url
-    for link in firstLinks:
-        secondLinks = getBase(link)
-        if args.verbose: print "internal second links: ",len(secondLinks), link
-        for url in secondlinks:
-                ratio=pageratio(url)
-                print ratio
+    (html,feedLinks)=getBase(url)
+    # follow feed page links 
+    print feedLinks
+    for link in feedLinks:
+        (html,pageLinks) = getBase(link)
+        ratio=pageRatio(link,html)
+        if args.verbose: print ratio, link
     
 else:
     dbname=args.dbname
     server="mongoPrimary:27017"
+    protocol="http"
     
     client = MongoClient(server)
     db = client[dbname]
@@ -148,8 +201,9 @@ else:
 
     feedsourceDB = db['feedsource']
     articleDB = db['article']
-    
-    feeds = feedsourceDB.find({"active": True, "protocol":"http"},no_cursor_timeout=False)    
+    urlhashDB = db['urlhash']
+    urlhashDB.create_index('line', unique=True)
+    feeds = feedsourceDB.find({"active": True, "protocol":protocol},no_cursor_timeout=False)    
     items=feeds.count()
     counter=0
     if args.verbose: print dbname+"/feedsource","has ",items," items"
@@ -159,15 +213,42 @@ else:
         url=feed['URL']
         site=feed['site']
         name=feed['name']
+        source=protocol+'|'+site+'|'+name
         if args.verbose: print "FEED: ",site+"|"+name
 
-        firstLinks=getBase(url)
-        if args.verbose: print "internal first links: ",len(firstLinks), url
-        for link in firstLinks:
-            secondLinks = getBase(link)
-            if args.verbose: print "internal second links: ",len(secondLinks), link
-            for url in secondlinks:
-                    ratio=pageratio(url)
-                    print ratio
+        (html,feedLinks)=getBase(url)
+        for link in feedLinks:
+            (html,pageLinks) = getBase(link)
+#            ratio=pageRatio(link,html)
+            getMeta(html)          
+            if args.train:  
+                storeLineHash(urlhashDB,link)
+            else:
+                samelink=urlhashDB.find_one({"line": link})
+                if samelink: count = samelink['count']
+
+                if count > 10:
+                    (title,summary,author,published)=getMeta(html)
+                    #if args.verbose: print "REJECT: ",source,title,summary,author
+                else:
+                    (html,http,code,realurl,headers,error) = geturl(link)
+                    if args.verbose: 
+                        print "ACCEPT: ",link
+                        print "title ",title
+                        print "summary ",summary
+                        print "author ", author
+                        print "published ",published
+                    storeLineHash(urlhashDB,link)
+                    
+                    textsize=len(html)
+                    if textsize==0:
+                        if args.verbose: print error, source, link, http, realurl, textsize, code
+                        continue
+                    (title,summary,author,published)=getMeta(html)
+
+                    bzhtml=bz2.compress(html)
+                    storeArticle(articleDB,source,title,summary,published,author,bzhtml,code,realurl,headers)
 
 
+# add feedhealth ranking
+# add TS date for retrieved
